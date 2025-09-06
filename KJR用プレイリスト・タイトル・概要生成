@@ -147,7 +147,6 @@ https://www.youtube.com/channel/UCbiHth48NA6T54WsTi9i1Tg?sub_confirmation=1
   * 入力例：`Smooth Jazz RELAX [70] – Gentle Jazz Beneath the Starlit Sky`
   * 変換後：`Smooth Jazz RELAX 70 | Gentle Jazz Beneath the Starlit Sky`
   * 手順：角括弧内の番号を抽出 → 角括弧削除 → 「`–`」を「`|`」に変換（前後スペース整形）。
-* **songsCount**：初回指示の「動画ナンバー＋曲数」から **曲数** を取得して `set songsCount to N` に反映。
 * **コードブロック方針**：タイトル・英語概要・AppleScript は **すべて `copy` コードブロック**で出力。
 
 ---
