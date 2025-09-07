@@ -1,0 +1,702 @@
+-- ▼ 1) クリップボードから変数を取り込む ------------------------------------
+set clipText to the clipboard as text
+set clipLines to paragraphs of clipText
+
+if (count of clipLines) < 9 then
+	display dialog "クリップボードに9行のデータが必要です：タイトル / 曲数 / アーティスト / ラベル / ジャンル値 / 価格 / 音源フォルダ / 作曲名(名) / 作曲名(姓)" buttons {"OK"}
+	return
+end if
+
+-- 余計な前後空白を削る簡易トリム
+on _trim(t)
+	try
+		set {TID, text item delimiters} to {text item delimiters, {space, tab, return}}
+		set s to t as text
+		-- 前後の改行・空白を粗めに除去
+		set text item delimiters to {return}
+		set s to (s as text)
+		set text item delimiters to TID
+		return (do shell script "printf %s " & quoted form of s & " | awk '{$1=$1}1'") -- awkで前後空白除去
+	on error
+		return t
+	end try
+end _trim
+
+set albumTitleText to _trim(item 1 of clipLines)
+set songsCount to (_trim(item 2 of clipLines)) as integer
+set artistName to _trim(item 3 of clipLines)
+set labelName to _trim(item 4 of clipLines)
+set genrePrimaryValue to _trim(item 5 of clipLines) -- 文字列のまま保持
+set priceValue to _trim(item 6 of clipLines) -- 文字列のまま保持（"3.99" 等）
+set audioDir to _trim(item 7 of clipLines)
+set composerFirst to _trim(item 8 of clipLines)
+set composerLast to _trim(item 9 of clipLines)
+
+
+
+-- ▼ 2) 以降は各自のオペレーションに合わせて追記してください -------------
+-- 例）ブラウザ操作やDistroKidフォーム入力のUIスクリプト等
+-- 本テンプレは albumTitleText / songsCount を事前セットする目的の最小構成です
+
+
+
+tell application "Google Chrome"
+	open location "https://distrokid.com/new/"
+	activate
+end tell
+delay 20
+
+
+-- ▼ 楽曲数をキーボード操作で選択
+set the clipboard to "楽曲数"
+delay 0.2
+tell application "System Events"
+	-- Cmd+F → 「楽曲数」検索
+	keystroke "f" using {command down}
+	delay 0.2
+	keystroke "v" using {command down}
+	delay 0.2
+	
+	-- Return（検索結果にジャンプ）
+	key code 36
+	delay 0.15
+	
+	-- Esc（検索UIを閉じる）
+	key code 53
+	delay 0.15
+	
+	-- Tab（ラベルの次＝セレクトへフォーカス）
+	key code 48
+	delay 0.15
+	
+	-- Up で先頭（=1曲）へ保険で戻す
+	repeat 40 times
+		key code 126 -- Up
+		delay 0.02
+	end repeat
+	delay 0.1
+	
+	-- Down を (songsCount - 1) 回：例 9曲なら 8回
+	repeat (songsCount - 1) times
+		key code 125 -- Down
+		delay 0.04
+	end repeat
+	
+	-- Return で確定（必要に応じてコメント解除）
+	key code 36
+end tell
+
+-- ▼ アーティスト名／バンド名 を検索して選択
+set the clipboard to "アーティスト名／バンド名"
+delay 0.2
+tell application "System Events"
+	-- Cmd+F → 「アーティスト名／バンド名」検索
+	keystroke "f" using {command down}
+	delay 0.2
+	keystroke "v" using {command down}
+	delay 0.2
+	
+	-- Return（検索結果にジャンプ）
+	key code 36
+	delay 0.15
+	
+	-- Esc（検索UIを閉じる）
+	key code 53
+	delay 0.15
+	
+	-- Tab（セレクトへフォーカス）
+	key code 48
+	delay 0.15
+	
+	-- Up で先頭へ戻す保険
+	repeat 10 times
+		key code 126 -- Up
+		delay 0.02
+	end repeat
+	delay 0.1
+end tell
+
+-- ▼ artistName に応じた Down 回数と Return
+if artistName is "KYOTO JAZZ RELAX" then
+	tell application "System Events"
+		key code 125 -- Down 1
+		delay 0.05
+		key code 36 -- Return
+	end tell
+else if artistName is "DEEP R, MUSIC" then
+	tell application "System Events"
+		key code 36 -- Return (先頭を選択)
+	end tell
+else if artistName is "R&B J, BEATS" then
+	tell application "System Events"
+		repeat 2 times
+			key code 125 -- Down
+			delay 0.05
+		end repeat
+		key code 36
+	end tell
+else if artistName is "Relaxing Lofi Beats" then
+	tell application "System Events"
+		repeat 3 times
+			key code 125
+			delay 0.05
+		end repeat
+		key code 36
+	end tell
+else if artistName is "VELVET E, SOUNDS" then
+	tell application "System Events"
+		repeat 4 times
+			key code 125
+			delay 0.05
+		end repeat
+		key code 36
+	end tell
+end if
+
+delay 0.5
+tell application "Google Chrome"
+	activate
+	if not (exists front window) then return
+	tell active tab of front window to execute javascript "
+        (function() {
+            var el = document.getElementById('js-non-compound-band-name-radio');
+            if (el) {
+                el.checked = true;
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        })();
+    "
+end tell
+-- ▼ リリース日を今日＋8日に設定
+tell application "Google Chrome"
+	tell active tab of window 1
+		execute javascript "
+(function(){
+  var rel = document.getElementById('release-date-dp');
+  if(rel){
+    var d = new Date();
+    d.setDate(d.getDate() + 8);
+    var iso = d.toISOString().slice(0,10); // YYYY-MM-DD
+    rel.value = iso;
+    ['input','change','blur'].forEach(function(ev){
+      try{ rel.dispatchEvent(new Event(ev,{bubbles:true})); }catch(e){}
+    });
+    console.log('release date set to', iso);
+  } else {
+    console.warn('release-date-dp not found');
+  }
+})();
+"
+	end tell
+end tell
+
+-- ▼ レーベル名を artistName に応じて入力
+set the clipboard to "レーベル名"
+delay 0.2
+tell application "System Events"
+	-- Cmd+F → 「レーベル名」検索
+	keystroke "f" using {command down}
+	delay 0.2
+	keystroke "v" using {command down}
+	delay 0.2
+	
+	-- Return（検索結果にジャンプ）
+	key code 36
+	delay 0.15
+	
+	-- Esc（検索UIを閉じる）
+	key code 53
+	delay 0.15
+	
+	-- Tab（フォーカスを入力欄へ移動）
+	key code 48
+	delay 0.15
+end tell
+
+-- ▼ artistName に応じたレーベル名を入力
+if artistName is "KYOTO JAZZ RELAX" then
+	set the clipboard to "KJR"
+else if artistName is "DEEP R, MUSIC" then
+	set the clipboard to "DRM"
+else if artistName is "R&B J, BEATS" then
+	set the clipboard to "RJB"
+else if artistName is "Relaxing Lofi Beats" then
+	set the clipboard to "RLB"
+else if artistName is "VELVET E, SOUNDS" then
+	set the clipboard to "VES"
+else
+	set the clipboard to "" -- デフォルト：空
+end if
+
+delay 0.2
+tell application "System Events"
+	keystroke "v" using {command down} -- レーベル名を貼り付け
+end tell
+
+-- ▼ アルバムの価格を検索して選択
+tell application "System Events"
+	-- Tab（セレクトにフォーカス移動）
+	key code 48
+	delay 0.15
+	
+	-- Up を12回（先頭に戻す）
+	repeat 12 times
+		key code 126 -- Up
+		delay 0.02
+	end repeat
+	
+	key code 36
+	delay 0.15
+end tell
+
+-- artistName → ジャンル名/値にマッピング
+set genreLabel to missing value
+if artistName is "KYOTO JAZZ RELAX" or artistName is "VELVET E, SOUNDS" then
+	set genreLabel to "ジャズ"
+else if artistName is "DEEP R, MUSIC" or artistName is "R&B J, BEATS" or artistName is "Relaxing Lofi Beats" then
+	set genreLabel to "R&B／ソウル"
+end if
+
+if genreLabel is missing value then
+	-- 未定義のアーティスト名なら何もしないで安全に抜ける
+	return
+end if
+
+-- ラベル → value
+set genreValue to ""
+if genreLabel is "ジャズ" then
+	set genreValue to "20"
+else if genreLabel is "R&B／ソウル" then
+	set genreValue to "25"
+end if
+
+-- ここで JS 文字列を完成させてから execute
+set jsText to "
+(function(val,label){
+  function fireAll(el){ ['input','change','blur','keyup'].forEach(function(t){try{el.dispatchEvent(new Event(t,{bubbles:true}))}catch(e){}}); }
+  var sel = document.getElementById('genrePrimary');
+  if(!sel){ console.warn('genrePrimary not found'); return; }
+  var opts = Array.from(sel.options);
+  var target =
+      opts.find(function(o){ return (o.value||'')===val; }) ||
+      opts.find(function(o){ return (o.label||o.textContent||'').trim()===label; }) ||
+      (label==='ジャズ' ? opts.find(function(o){ return (o.getAttribute('data-genre')||'')==='Jazz'; })
+                        : opts.find(function(o){ return (o.getAttribute('data-genre')||'')==='R&B/Soul'; }));
+  if(!target){ console.warn('genre option not found for', val, label); return; }
+  target.selected = true;
+  sel.value = target.value;
+  fireAll(sel);
+  if (typeof genreChange==='function'){ try{ genreChange(); }catch(e){} }
+  if (typeof removeRedIfNotEmpty==='function'){ try{ removeRedIfNotEmpty(sel); }catch(e){} }
+  console.log('Primary genre set to', label, '('+sel.value+')');
+})('" & genreValue & "','" & genreLabel & "');"
+
+tell application "Google Chrome"
+	tell active tab of window 1
+		execute javascript jsText
+	end tell
+end tell
+
+-- ▼ アルバムジャケット：検索 → Return → Esc → Tab → Return（ファイル選択を開く）
+set the clipboard to "アルバムジャケット"
+delay 0.2
+tell application "System Events"
+	keystroke "f" using {command down} -- Cmd+F
+	delay 0.2
+	keystroke "v" using {command down} -- 検索語貼り付け
+	delay 0.2
+	key code 36 -- Return（ヒット箇所へジャンプ）
+	delay 0.15
+	key code 53 -- Esc（検索UI閉じ）
+	delay 0.15
+	key code 48 -- Tab（アップロードボタン or 入力にフォーカス）
+	delay 0.15
+	key code 36 -- Return（ファイル選択ダイアログを開く）
+end tell
+delay 0.5
+
+-- ▼ ★修正：アルバムジャケットは audioDir（クリップボード7行目）配下から選択する
+try
+	-- JPG を特定（*.jpg / *.JPG）。1枚想定だが安全のため最初の1件を使用
+	set jpgPath to do shell script "ls -1 " & quoted form of audioDir & "/*.[jJ][pP][gG] 2>/dev/null | head -n 1"
+	if jpgPath is "" then error "JPG が見つかりませんでした（" & audioDir & "）"
+	
+	-- パスを貼り付けて選択（⌘⇧G → パス → Return）
+	set the clipboard to jpgPath
+	tell application "System Events"
+		keystroke "g" using {command down, shift down} -- Go to Folder
+		delay 0.25
+		keystroke "v" using {command down} -- フルパス貼り付け（ファイル直指定）
+		delay 0.1
+		key code 36 -- Return（そのファイルへ移動）
+	end tell
+	
+	-- 「開く」ボタン（日本語/英語両対応。取れない場合は Return でフォールバック）
+	delay 0.35
+	tell application "System Events"
+		tell process "Google Chrome"
+			if (exists (button "開く" of sheet 1 of window 1)) then
+				click button "開く" of sheet 1 of window 1
+			else if (exists (button "Open" of sheet 1 of window 1)) then
+				click button "Open" of sheet 1 of window 1
+			else
+				key code 36 -- Return フォールバック
+			end if
+		end tell
+	end tell
+	
+on error errMsg
+	display notification errMsg with title "アルバムジャケット選択エラー"
+end try
+tell application "Google Chrome"
+	tell active tab of window 1
+		execute javascript "if(document.activeElement){try{document.activeElement.blur()}catch(e){}}"
+	end tell
+end tell
+
+
+-- ▼ 1) 「アルバム名に他のアーティスト名や商標を使わないでください。」を検索して警告にフォーカス
+set the clipboard to "アルバム名に他のアーティスト名や商標を使わないでください。"
+delay 0.2
+
+tell application "System Events"
+	-- Command + F（検索）
+	keystroke "f" using {command down}
+	delay 0.5
+	
+	-- Command + V（貼り付け）
+	keystroke "v" using {command down}
+	delay 0.2
+	
+	-- Esc（検索UIを閉じる）
+	key code 53
+	delay 0.2
+	
+	-- Shift + Tab（フォーカス戻す）
+	key code 48 using {shift down}
+	delay 1
+end tell
+
+-- 2) クリップボードを albumTitleText 
+set the clipboard to albumTitleText
+delay 0.2
+tell application "System Events"
+	keystroke "v" using {command down}
+	-- 必要なら確定
+	-- key code 36
+end tell
+
+
+
+tell application "Google Chrome" to activate
+delay 0.2
+
+repeat with t from 1 to songsCount by 1
+	-- 1) n番目（古い順）のファイル名を取得（拡張子と末尾空白を除去）
+	set skipThis to false
+	try
+		set nthTitle to do shell script "ls -1tr " & quoted form of audioDir & "/*.m4a 2>/dev/null | sed -n '" & t & "p' | xargs -I{} basename \"{}\" | sed -E 's/\\.[Mm]4[Aa]$//' | sed -E 's/[[:space:]]+$//'"
+		if nthTitle is "" then error "n=" & t & " の位置に .m4a が見つかりません"
+	on error errMsg
+		display notification errMsg with title "タイトル取得エラー"
+		set skipThis to true
+	end try
+	
+	if not skipThis then
+		-- 2) 検索語を決定：1曲目のみ「トラック 1」、2曲目以降は「トラック2」「トラック3」…
+		if t = 1 then
+			set searchKey to "トラック 1"
+		else
+			set searchKey to "トラック" & t
+		end if
+		
+		-- 3) 検索 → Esc → Tab
+		set the clipboard to searchKey
+		delay 0.1
+		tell application "System Events"
+			keystroke "f" using {command down}
+			delay 0.2
+			keystroke "v" using {command down}
+			delay 0.2
+			key code 53 -- Esc
+			delay 0.15
+			key code 48 -- Tab
+			delay 0.15
+		end tell
+		
+		-- 4) タイトルを貼り付け
+		set the clipboard to nthTitle
+		delay 0.1
+		tell application "System Events"
+			keystroke "v" using {command down}
+		end tell
+		
+		delay 0.25
+	end if
+	
+	
+	
+	
+	-------------------------------------------------------------------------------
+	-- ＊アップロードするファイルを設定する作業
+	-------------------------------------------------------------------------------
+	tell application "System Events"
+		-- Tab ×3 → Return で「ファイル選択」ダイアログを開く
+		key code 48
+		delay 0.12
+		key code 48
+		delay 0.12
+		key code 48
+		delay 0.12
+		key code 36
+	end tell
+	delay 0.4
+	
+	-- 古い順で n 番目の .m4a のフルパスを取得 → ダイアログに直接指定（⌘⇧G）
+	try
+		set nthFullPath to do shell script "ls -tr " & quoted form of audioDir & "/*.m4a 2>/dev/null | sed -n '" & t & "p'"
+		set nthFullPath to do shell script "ls -1tr " & quoted form of audioDir & "/*.m4a 2>/dev/null | sed -n '" & t & "p'"
+		
+		if nthFullPath is "" then error "n=" & t & " の位置に .m4a が見つかりません"
+		set the clipboard to nthFullPath
+		tell application "System Events"
+			keystroke "g" using {command down, shift down} -- フォルダへ移動
+			delay 0.25
+			keystroke "v" using {command down} -- パス貼付
+			delay 0.1
+			key code 36 -- Return
+		end tell
+		delay 0.35
+		tell application "System Events"
+			tell process "Google Chrome"
+				if (exists (button "開く" of sheet 1 of window 1)) then
+					click button "開く" of sheet 1 of window 1
+				else if (exists (button "Open" of sheet 1 of window 1)) then
+					click button "Open" of sheet 1 of window 1
+				else
+					key code 36 -- フォールバック
+				end if
+			end tell
+		end tell
+	on error errMsg
+		display notification errMsg with title "ファイル選択エラー（n=" & t & "）"
+	end try
+	
+	-- ▼ 作曲・作詞／作家名／インスト（tracknum = t）を JS で直接設定
+	tell application "Google Chrome"
+		tell active tab of window 1
+			set jsSongMeta to "
+(function(track, firstName, lastName, artistName){
+  function fireAll(el){
+    ['input','change','blur','keyup'].forEach(function(ev){
+      try{ el.dispatchEvent(new Event(ev,{bubbles:true})) }catch(_){}
+    });
+    if (typeof el.onblur==='function'){ try{ el.onblur({target: el}); }catch(_){ } }
+  }
+
+  // 1) 役割 = 作曲（value=125）
+  (function(){
+    var sel = document.querySelector('select.songwriter_real_name_role[tracknum=\"'+track+'\"], select.coolSelect.songwriter_real_name_role[tracknum=\"'+track+'\"]');
+    if(!sel){
+      console.warn('role select not found for track', track);
+      return;
+    }
+    var opt = Array.from(sel.options).find(function(o){ return (o.value||'')==='125'; });
+    if(opt){ opt.selected = true; sel.value = '125'; fireAll(sel); }
+  })();
+
+  // 2) 作家名（first/last）
+  (function(){
+    var first = document.querySelector('input.songwriter_real_name_first[tracknum=\"'+track+'\"]');
+    if(first){ first.focus(); first.value = firstName; try{removeHtmlFromInput(first)}catch(_){ } try{removeNotAllowedChars(first)}catch(_){ } fireAll(first); }
+    var last  = document.querySelector('input.songwriter_real_name_last[tracknum=\"'+track+'\"]');
+    if(last){ last.focus();  last.value  = lastName;  try{removeHtmlFromInput(last)}catch(_){ }  try{removeNotAllowedChars(last)}catch(_){ }  fireAll(last); }
+  })();
+
+  // 3) インストゥルメンタル ON 条件（あなたの条件に合わせて分岐）
+  (function(){
+    var shouldCheck = false;
+    if (artistName==='KYOTO JAZZ RELAX' || artistName==='Relaxing Lofi Beats' || artistName==='VELVET E, SOUNDS'){
+      shouldCheck = true;
+    }
+    // ラジオ取得：id 固定パターンと属性フォールバック両対応
+    var rb = document.getElementById('js-instrumental-radio-button-'+track) ||
+             document.querySelector('input.distroInstrumental[track=\"'+track+'\"], input.distroInstrumental[tracknum=\"'+track+'\"]');
+    if(!rb){ console.warn('instrumental radio not found for track', track); return; }
+    if (shouldCheck !== rb.checked){
+      rb.checked = shouldCheck;
+      ['input','change','click'].forEach(function(ev){
+        try{ rb.dispatchEvent(new Event(ev,{bubbles:true})) }catch(_){}
+      });
+    }
+  })();
+
+  console.log('track '+track+' meta set: role=作曲, name='+firstName+' '+lastName+', instrumental processed');
+})(" & t & ", " & quoted form of composerFirst & ", " & quoted form of composerLast & ", " & quoted form of artistName & ");
+"
+			execute javascript jsSongMeta
+		end tell
+	end tell
+	
+	-- 任意：少し待つ（UI側が重いと反映前に次へ進むため）
+	delay 0.2
+end repeat
+
+tell application "Google Chrome"
+	tell active tab of window 1
+		execute javascript "if(document.activeElement){try{document.activeElement.blur()}catch(e){}}"
+	end tell
+end tell
+
+tell application "Google Chrome"
+	tell active tab of window 1
+		execute javascript "
+(function openCreditsSection(){
+  function norm(s){return (s||'').replace(/\\s+/g,' ').trim();}
+  // 見出し候補を広めに収集
+  var candidates = Array.from(document.querySelectorAll(
+    '.requirements-item-title, .requirement-item-title, .requirements-item .title, .requirement-item .title, summary, h3, h4, button'
+  ));
+  // ラベル（日本語/英語バックアップ）
+  var labels = ['このリリースの各楽曲にクレジットを追加','Add credits to each track in this release'];
+
+  // タイトル要素を見つける
+  var title = null;
+  outer: for (var L of labels){
+    for (var el of candidates){
+      if (norm(el.textContent).indexOf(L) !== -1){ title = el; break outer; }
+    }
+  }
+  if(!title){ console.warn('credits title not found'); return 'NOT_FOUND'; }
+
+  // そのセクションのコンテナを取得
+  var container = title.closest('.requirements-item, .requirement-item, details') || title.parentElement;
+  if(!container){ container = title.parentElement; }
+
+  // 既に開いているかを判定（details/open or class）
+  var isOpen = false;
+  var d = container.closest('details') || (container.tagName==='DETAILS' ? container : null);
+  if (d){ isOpen = !!d.open; }
+  var cl = container.classList || {};
+  if (cl.contains && (cl.contains('open')||cl.contains('expanded')||cl.contains('active')||cl.contains('show'))){ isOpen = true; }
+  if (title.getAttribute && title.getAttribute('aria-expanded')==='true'){ isOpen = true; }
+
+  // トグル対象をコンテナ内で限定して探す
+  var toggle =
+      (title.querySelector && (title.querySelector('button,[role=\"button\"],.fa-plus,.fa-minus'))) ||
+      container.querySelector(':scope > .requirements-item-title button, :scope > .requirement-item-title button, :scope > summary') ||
+      title;
+
+  // スクロール
+  try{ (container||title).scrollIntoView({block:'center'}); }catch(_){}
+  // 未オープンのときだけクリック
+  if (!isOpen && toggle){
+    try{ toggle.dispatchEvent(new MouseEvent('click',{bubbles:true})); }catch(_){}
+    if (typeof toggle.click==='function'){ try{ toggle.click(); }catch(_){ } }
+  }
+  return 'OK';
+})();
+"
+	end tell
+end tell
+
+tell application "Google Chrome"
+	tell active tab of window 1
+		execute javascript "
+(function(){
+  var radios = document.querySelectorAll('input.distroFeat.feat_*, input.distroFeat[tracknum]');
+  radios.forEach(function(rb){
+    if (rb.checked){
+      rb.checked = false;
+      ['input','change','click'].forEach(function(ev){
+        try{ rb.dispatchEvent(new Event(ev,{bubbles:true})); }catch(_){}
+      });
+    }
+  });
+  return 'FEAT_CLEARED';
+})();
+"
+	end tell
+end tell
+
+
+
+-- ▼ Performer（演奏者）：ベースギターをトラック1に設定 → 名前入力 → 全トラックにコピー → 実行
+tell application "Google Chrome"
+	tell active tab of window 1
+		set jsPerformer to "
+(function(name){
+  function fireAll(el){ ['input','change','blur'].forEach(e=>{try{el.dispatchEvent(new Event(e,{bubbles:true}))}catch(_){}}); }
+
+  // track-1 の performer ロール <select>
+  var sel = document.getElementById('track-1-performer-1-role') ||
+            document.querySelector('#track-1-performer-1-role, select.performer-role');
+  if(!sel){ console.warn('performer select not found for track-1'); return 'NO_PERFORMER_SELECT'; }
+
+  // ベースギター（value/labelどちらでもヒット）
+  var opts = Array.from(sel.options);
+  var target = opts.find(o => (o.value||'')==='Bass guitar (all types)') ||
+               opts.find(o => (o.label||o.textContent||'').trim()==='ベースギター');
+  if(!target){ console.warn('ベースギター option not found'); return 'NO_OPTION'; }
+
+  target.selected = true; sel.value = target.value; fireAll(sel);
+
+  // 同じ行のテキストボックス（演奏者名）
+  var nameInput = sel.closest('div') && sel.closest('div').querySelector('input[type=\"text\"]');
+  if(nameInput){ nameInput.focus(); nameInput.value = name; fireAll(nameInput); }
+
+  // 「この演奏者をこのアルバムのすべてのトラックにコピー」をクリック
+  var btn = document.getElementById('copy-performer') ||
+            document.querySelector('#copy-performer, [onclick*=\"copyCreditFromTrack\"][onclick*=\"performer\"]');
+  if(btn){ try{btn.click()}catch(_){ try{btn.dispatchEvent(new MouseEvent('click',{bubbles:true}))}catch(_){}} }
+
+  // SweetAlert2 の〔実行〕を少し待って押す
+  setTimeout(function(){
+    var ok = document.querySelector('.swal2-confirm.swal2-styled');
+    if(ok){ try{ok.click()}catch(_){ try{ok.dispatchEvent(new MouseEvent('click',{bubbles:true}))}catch(_){}} }
+  }, 800);
+
+  return 'OK';
+})(" & quoted form of artistName & ");"
+		execute javascript jsPerformer
+	end tell
+end tell
+delay 1.0 -- ちょい長め（ダイアログ確定待ち）
+
+-- ▼ Producer（プロデューサー）：エグゼクティブプロデューサーをトラック1に設定 → 名前入力 → 全トラックにコピー → 実行
+tell application "Google Chrome"
+	tell active tab of window 1
+		set jsProducer to "
+(function(name){
+  function fireAll(el){ ['input','change','blur'].forEach(e=>{try{el.dispatchEvent(new Event(e,{bubbles:true}))}catch(_){}}); }
+
+  var sel = document.getElementById('track-1-producer-1-role') ||
+            document.querySelector('#track-1-producer-1-role, select.producer-role');
+  if(!sel){ console.warn('producer select not found for track-1'); return 'NO_PRODUCER_SELECT'; }
+
+  // エグゼクティブプロデューサー（value/labelの両方で検索）
+  var opts = Array.from(sel.options);
+  var target = opts.find(o => (o.value||'')==='Executive producer') ||
+               opts.find(o => (o.label||o.textContent||'').trim()==='エグゼクティブプロデューサー');
+  if(!target){ console.warn('Executive producer option not found'); return 'NO_OPTION'; }
+
+  target.selected = true; sel.value = target.value; fireAll(sel);
+
+  var nameInput = sel.closest('div') && sel.closest('div').querySelector('input[type=\"text\"]');
+  if(nameInput){ nameInput.focus(); nameInput.value = name; fireAll(nameInput); }
+
+  var btn = document.getElementById('copy-producer') ||
+            document.querySelector('#copy-producer, [onclick*=\"copyCreditFromTrack\"][onclick*=\"producer\"]');
+  if(btn){ try{btn.click()}catch(_){ try{btn.dispatchEvent(new MouseEvent('click',{bubbles:true}))}catch(_){}} }
+
+  setTimeout(function(){
+    var ok = document.querySelector('.swal2-confirm.swal2-styled');
+    if(ok){ try{ok.click()}catch(_){ try{ok.dispatchEvent(new MouseEvent('click',{bubbles:true}))}catch(_){}} }
+  }, 800);
+
+  return 'OK';
+})(" & quoted form of artistName & ");"
+		execute javascript jsProducer
+	end tell
+end tell
+delay 1.0
