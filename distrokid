@@ -494,7 +494,8 @@ repeat with t from 1 to songsCount by 1
     if (typeof el.onblur==='function'){ try{ el.onblur({target: el}); }catch(_){ } }
   }
 
-  // 1) 役割 = 作曲（value=125）※artistNameで125/197を振り分け
+
+    // 1) 役割 = 作曲（value=125）※artistNameで125/197を振り分け
   (function(){
     var sel = document.querySelector('select.songwriter_real_name_role[tracknum="'+track+'"], select.coolSelect.songwriter_real_name_role[tracknum="'+track+'"]');
     if(!sel){
