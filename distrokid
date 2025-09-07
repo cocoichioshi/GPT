@@ -482,10 +482,10 @@ repeat with t from 1 to songsCount by 1
 		display notification errMsg with title "ファイル選択エラー（n=" & t & "）"
 	end try
 	
-	-- ▼ 作曲・作詞／作家名／インスト（tracknum = t）を JS で直接設定
-	tell application "Google Chrome"
-		tell active tab of window 1
-			set jsSongMeta to "
+-- ▼ 作曲・作詞／作家名／インスト（tracknum = t）を JS で直接設定
+tell application "Google Chrome"
+  tell active tab of window 1
+    set jsSongMeta to "
 (function(track, firstName, lastName, artistName){
   function fireAll(el){
     ['input','change','blur','keyup'].forEach(function(ev){
@@ -494,15 +494,26 @@ repeat with t from 1 to songsCount by 1
     if (typeof el.onblur==='function'){ try{ el.onblur({target: el}); }catch(_){ } }
   }
 
-  // 1) 役割 = 作曲（value=125）
+  // 1) 役割 = 作曲(125) or 作詞(197) を artistName で分岐
   (function(){
+    var roleValue = '125'; // デフォルト
+
+    var group125 = ['KYOTO JAZZ RELAX','VELVET E, SOUNDS','Relaxing Lofi Beats'];
+    var group197 = ['DEEP R, MUSIC','R&B J, BEATS'];
+
+    if (group125.includes(artistName)) {
+      roleValue = '125';
+    } else if (group197.includes(artistName)) {
+      roleValue = '197';
+    }
+
     var sel = document.querySelector('select.songwriter_real_name_role[tracknum=\"'+track+'\"], select.coolSelect.songwriter_real_name_role[tracknum=\"'+track+'\"]');
     if(!sel){
       console.warn('role select not found for track', track);
       return;
     }
-    var opt = Array.from(sel.options).find(function(o){ return (o.value||'')==='125'; });
-    if(opt){ opt.selected = true; sel.value = '125'; fireAll(sel); }
+    var opt = Array.from(sel.options).find(function(o){ return (o.value||'')===roleValue; });
+    if(opt){ opt.selected = true; sel.value = roleValue; fireAll(sel); }
   })();
 
   // 2) 作家名（first/last）
@@ -512,6 +523,12 @@ repeat with t from 1 to songsCount by 1
     var last  = document.querySelector('input.songwriter_real_name_last[tracknum=\"'+track+'\"]');
     if(last){ last.focus();  last.value  = lastName;  try{removeHtmlFromInput(last)}catch(_){ }  try{removeNotAllowedChars(last)}catch(_){ }  fireAll(last); }
   })();
+
+})(arguments[0], arguments[1], arguments[2], arguments[3]);
+"
+  end tell
+end tell
+
 
   // 3) インストゥルメンタル ON 条件（あなたの条件に合わせて分岐）
   (function(){
@@ -530,6 +547,8 @@ repeat with t from 1 to songsCount by 1
       });
     }
   })();
+
+  
 
   console.log('track '+track+' meta set: role=作曲, name='+firstName+' '+lastName+', instrumental processed');
 })(" & t & ", " & quoted form of composerFirst & ", " & quoted form of composerLast & ", " & quoted form of artistName & ");
